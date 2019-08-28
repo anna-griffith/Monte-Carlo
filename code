@@ -1,0 +1,574 @@
+"""
+Created on Thu Apr  4 10:16:43 2019
+
+@author: annagriffith
+"""
+
+# Import relevent libraries
+import numpy as np
+from matplotlib import pyplot as plt
+from numpy.random import seed
+from numpy.random import rand
+import matplotlib as mpl
+from scipy import optimize, stats
+from scipy.optimize import curve_fit
+import scipy.misc
+
+# transforms uniformly distributed random numbers to those with a sine dist
+# analytical method
+def theta_dist(x_gen):
+    '''
+    Inputs -
+    x_gen: uniformly distributed random numbers
+     
+    returns - 
+    theta: array of randomly generated numbers distributed proportional to sin
+    '''
+    theta = np.arccos(1-2*x_gen)
+    return theta
+
+# transforms uniformly distributed random numbers to those with a sine dist
+# rejection method
+def accept_reject(N):
+    '''
+    Inputs -
+    N : length of array required
+     
+    returns - 
+    theta: array of randomly generated numbers distributed proportional to sin
+    '''
+    v = []
+    i = 1    
+    # loops over procedure until array of length N obtained
+    while len(v)< N:
+        i = i+1
+        seed(i)
+        u = np.random.uniform(0,np.pi,N)
+        y = rand(N)
+        # accept if y lies below sin curve
+        v = np.append(v,u[y < np.sin(u)])
+        
+    theta = v[:N]
+    return theta
+
+# finds histogram bin heights and centers, and then fits a function to them
+def fitting(x_vals, func, bounds, clear):
+    '''
+    Inputs -
+    x_vals : randomly distributed x values
+    func: function that you want to fit to the histogram
+    bounds: bounds of the fit parameters
+    clear: 'True' if you want to clear the histogram that you've created, 
+            'False' otherwise
+     
+    returns - 
+    fit_params: parameters from the function defined that 'curve_fit' has found 
+    fit_cov: array of covariances of the fit parameters
+    bin_centers: array of the x values corresponding to the centers of bins
+    bin_heights: array of the y values corresponding to the heights of bins
+    '''
+    
+    bin_heights, bin_borders, _ = plt.hist(x_vals, bins='auto', 
+                                   label='histogram', normed= True)
+    bin_centers = bin_borders[:-1] + np.diff(bin_borders) / 2
+    fit_params, fit_cov = curve_fit(func, bin_centers, bin_heights, 
+                           bounds = bounds)
+    # clear histogram if not going to plotted
+    if clear == True:
+        plt.clf()
+        
+    return fit_params, fit_cov, bin_centers, bin_heights
+
+# calculates z values in tests for equivalence on fit parameters
+def z_test(x, mu, sigma, bound, sign):
+    '''
+    Inputs -
+    x : value of the fit parameter if distributed exactly as intended
+    mu: value of the fit parameter found by 'curve_fit'
+    sigma: standard deviation of the calculated fit parameter
+    bound: equivalence bound definied
+    sign: '+' or '-' corresponding to tests of the two null hypotheses 
+     
+    returns - 
+    z(+/-) = (abs(x - mu) +/- bound) / (sigma): z values for equivalence tests
+    '''
+    if sign == '-':
+        return (abs(x - mu) - bound) / (sigma)
+    else:
+        return (abs(x - mu) + bound) / (sigma)
+
+# calculates p-values for equivalence tests in fit parameters
+# corresponds to probability that the difference between the actual  
+# and measured fit parameters lies outside the equivalence bounds
+def p_vals(a, b, c, fit_params, std_dev, bound):
+    '''
+    Inputs -
+    a,b,c : values of the fit parameters if distributed exactly as intended
+    fit_params: array of calculated fit parameters
+    std_dev: array of standard deviations of the calculated fit parameters
+    bound: equivalence bound definied 
+     
+    returns - 
+    pa, pb, pc: p-values for equivalence tests on each of the fit parameters 
+    ''' 
+    # z value for upper bound
+    za_upper = z_test(a , fit_params[0], std_dev[0], bound,'+')
+    zb_upper= z_test(b , fit_params[1], std_dev[1], bound,'+')
+    zc_upper = z_test(c, fit_params[2], std_dev[2], bound,'+')
+    
+    # z value for lower bound
+    za_lower = z_test(a , fit_params[0], std_dev[0], bound,'-')
+    zb_lower = z_test(b , fit_params[1], std_dev[1], bound,'-')
+    zc_lower = z_test(c, fit_params[2], std_dev[2], bound,'-')
+    
+    # total prob. that calculated fit parameter lies outside bounds
+    pa = stats.norm.cdf(za_lower) + (1 - stats.norm.cdf(za_upper))
+    pb = stats.norm.cdf(zb_lower) + (1 - stats.norm.cdf(zb_upper))
+    pc = stats.norm.cdf(zc_lower) + (1 - stats.norm.cdf(zc_upper))
+    
+    return pa, pb, pc
+
+# tests distribution based on chi-squared values between 
+# observed and expected values
+def chi2test(observed, expected, threshold, plot_dist):
+    '''
+    Inputs -
+    observed: array of bin heights from generated random numbers
+    expected: expected array of hin heights if distributed as intended
+    threshold: minimum p-value allowed to pass the test
+    plot_dist: 'Y' to print the calculated chi-squared and p values
+               'N' to not
+     
+    returns - 
+    'True': if test is passed
+    'False': if not
+    '''     
+    stat, p = stats.chisquare(observed, expected)
+    if plot_dist == True:
+        print('Chi-squared value: ', stat, '\np-value: ', p, '\n\n')
+    if p < threshold:
+        return False
+    else:
+        return True
+
+# uses inbuilt numpy function to create randomly distributed decay times
+def decay_dist(N):
+    '''
+    Inputs -
+    N : length of array required
+     
+    returns - 
+    t: array of randomly generated times that nuclei decays in
+    '''   
+    t = np.random.exponential(tau, N)
+    return t
+
+# generates randomly distributed phi angles(angular distribution of gamma rays)
+def phi_dist(x_gen):
+    '''
+    Inputs -
+    x_gen: uniformly distributed random numbers
+     
+    returns - 
+    phi: array of uniformly distributed numbers between 0 and np.pi
+    '''
+    phi = np.pi*x_gen
+    return phi 
+
+#################
+# the following functions describe the fittings applied to different 
+# randomly generated distributions
+'''
+Inputs -
+x: array of values to be fitted
+a, b, c, mu, sigma, lam: parameters to be fitted in these functions
+ 
+Returns - 
+pdf's of the relevent functions
+'''
+
+def sin_fit(x, a, b, c):
+    return a*np.sin(b*x) + c
+
+def decay_fit(x, a, b):
+    return a * np.exp(- x / b)
+
+def uniform_fit(x, a, b):
+    return a*x + b 
+
+def normal_fit(x, mu, sigma):
+    return (2*np.pi*sigma**2)**-0.5 *np.exp(-(x-mu)**2/(2*sigma**2))
+    
+def poisson_fit(x, lam):
+    return lam**x * np.exp(-lam) / scipy.misc.factorial(x)
+
+#################
+
+# tests normally distributed random numbers in physics task 2
+# do not want to plot the distributions as there are too many
+def normal_test(xvals, mu, sigma):
+    '''
+    Inputs -
+    x_vals: array of random numbers produced
+    mu: expected mean of x_vals
+    sigma: expected std dev of x_vals
+     
+    returns - 
+    test_bool: 'True' if test is passed, 'False' if not
+    '''    
+    fit_params, fit_cov, bin_centers, bin_heights = fitting(xvals, normal_fit,
+                                     (0, [50., 50.]), True)
+
+    observed = bin_heights
+    expected = [stats.norm.pdf(i, mu, sigma) for i in bin_centers]
+    test_bool = chi2test(observed, expected, 0.95, False)
+    return test_bool  
+
+# for each value of the cross section, returns the percentage of values over 5
+def confidence_level(cs): 
+    '''
+    Inputs -
+    cs: cross section of the particle
+     
+    returns - 
+    percentage: percentage of total signal values over 5
+    '''    
+    total, _ = total_signal(cs,N3)
+    over_5 = total[total > 5]
+    percentage = len(over_5)/len(total) - 0.95
+    return percentage
+
+# calculates an array of total signal values for each value of the cross section
+def total_signal(cs, N):
+    '''
+    Inputs -
+    cs: cross section of the particle
+    N: number of pseudo-experiments modelled
+     
+    returns - 
+    total: array of values of the total signal = true signal + background
+    test_bool3: array of 'True' or 'False' composed of tests on randomly
+                distributed variables in task 3
+    '''       
+    test_bool3 = []
+    
+    luminosity_mean = np.random.normal(12, 1, N)
+    test_bool3 = np.append(test_bool3, normal_test(luminosity_mean, 12, 1))
+    
+    background_mean = np.random.normal(5.7, 0.4, N)
+    test_bool3 = np.append(test_bool3, normal_test(background_mean, 5.7, 0.4))
+    
+    background_mean = background_mean[background_mean >= 0]
+    luminosity_mean = luminosity_mean[luminosity_mean >= 0] #cut out values below zero
+    mean_values = np.array((luminosity_mean,background_mean))
+
+    signal = []
+    background = []
+    
+    for mean in mean_values.T:
+        m_luminosity = mean[0]
+        m_background = mean[1]
+        signal = np.append(signal,np.random.poisson(m_luminosity*cs, 1))
+        background = np.append(background,np.random.poisson(m_background, 1))
+    
+    total = signal + background
+    
+    return total, test_bool3
+
+###############
+# Task 1: compares sine distributions analytical and rejection methods
+###############
+print("########## Task 1 Plots: Comparison of analytical and "
+      "\naccept-reject methods ##########\n\n")
+   
+# seed random number generator
+seed(1)
+
+# array length for task 1
+N1 = int(100000)
+
+analytical_x = theta_dist(rand(N1))
+accept_x = accept_reject(N1)
+
+
+# fits sin curve to analytical array
+fit_params, fit_cov, bin_centers, bin_heights = fitting(analytical_x,sin_fit,  
+                                  ((0., 0, -0.5), (1, 2, 0.5)), False)
+
+# chi-squared statistics
+observed = bin_heights
+expected = 0.5*np.sin(bin_centers)
+p, stat = stats.chisquare(observed, expected)
+
+# plots histrogram and fitting
+plt.plot(bin_centers, sin_fit(bin_centers, *fit_params), 'r--',
+          label='fit: a=%5.2f, b=%5.2f, c=%5.2f' % tuple(fit_params))
+
+plt.title("Analytical inverse  : $y = asin(bx) + c$")
+plt.xlabel('\u03B8 distribution')
+plt.ylabel('counts')
+plt.legend()
+plt.show()
+print('Chi-squared value: ', stat, '\np-value: ', p, '\n\n')
+
+# finds p-values in test for equivalence in fit parameters
+print('p-values for each fit parameter in tests for equivalence:\n')
+std_dev = np.sqrt(np.diag(fit_cov))
+pa, pb, pc = p_vals(0.5, 1., 0., fit_params, std_dev, 0.01)
+print('a:', pa)
+print('b:', pb)
+print('c:', pc,'\n\n\n')
+
+# fits sin curve to acceot-reject array
+fit_params, fit_cov, bin_centers, bin_heights = fitting(accept_x,sin_fit,
+                                    (0, [3., 3., 3.]), False) 
+
+# chi-squared statistics
+observed = bin_heights
+expected = 0.5*np.sin(bin_centers)
+p, stat = stats.chisquare(observed, expected)
+
+
+
+# plots histrogram and fitting
+plt.plot(bin_centers, sin_fit(bin_centers, *fit_params), 'r--',
+          label='fit: a=%5.2f, b=%5.2f, c=%5.2f' % tuple(fit_params))
+
+plt.title("Accept reject : $y = asin(bx) + c$")
+plt.xlabel('\u03B8 distribution')
+plt.ylabel('counts')
+plt.legend()
+plt.show()
+print('Chi-squared value: ', stat, '\np-value: ', p, '\n\n')
+
+# finds p-values in test for equivalence in fit parameters
+print('p-values for each fit parameter in tests for equivalence\n')
+std_dev = np.sqrt(np.diag(fit_cov))
+pa, pb, pc = p_vals(0.5, 1., 0., fit_params, std_dev, 0.01)
+print('a:', pa)
+print('b:', pb)
+print('c:', pc,'\n\n\n')
+
+
+###############
+# Task 2: models the detection of gamma rays from a radioactive source
+###############
+print("########## Task 2 Plots: Pseudo-experiment of radioactive nuclei fired"
+      "\nat a perpendicular detector, emmiting gamma rays ##########\n\n")
+
+# set constants for task 2
+v = 2000
+tau = 550*10**-6
+N2 = int(1e5)
+
+print("Histograms of each randomly distributed variable with their fittings "
+      "\nand chi-squared values: ")
+                  
+
+
+# create array for testing values    
+test_bool = []
+
+# create array of decay times
+decay_times = decay_dist(N2)
+
+# finds histrogram and fitting
+fit_params, fit_cov, bin_centers, bin_heights = fitting(decay_times, decay_fit,  
+                                  (0, [3000., 1.]), False)
+
+#plots histogram
+plt.plot(bin_centers, decay_fit(bin_centers, *fit_params), 'r--',
+          label='fit: a=%5.2f, b=%5.4f' % tuple(fit_params))
+plt.title("Decay time distribution, fit: $y = a e^{-x/b}$")
+plt.xlabel('decay time (s)')
+plt.ylabel('counts')
+plt.legend()
+plt.show()
+
+# test based on chi-squared values
+observed = tau * bin_heights
+expected = np.exp(- bin_centers / tau)
+test_bool = np.append(test_bool, chi2test(observed, expected, 0.95, True))
+
+
+# create array of phi angles
+phi_times = phi_dist(rand(len(decay_times)))
+
+# finds histrogram and fitting
+fit_params, fit_cov, bin_centers, bin_heights = fitting(phi_times, uniform_fit,
+                                  (0, [1., 1.]), False)
+   
+#plots histogram
+plt.plot(bin_centers, uniform_fit(bin_centers, *fit_params), 'r--',
+          label='fit: a=%5.2f, b=%5.2f' % tuple(fit_params))
+
+plt.title("$\phi$ distribution, fit: $y = ax + b$")
+plt.legend()
+plt.xlabel('$\phi$ distribution')
+plt.ylabel('counts')
+plt.show()
+
+# test based on chi-squared values
+observed = bin_heights
+expected = np.pi**-1
+test_bool = np.append(test_bool, chi2test(observed, expected, 0.95, True))
+
+# create array of theta angles
+theta_times = theta_dist(rand(len(decay_times)))
+# finds histrogram and fitting
+fit_params, fit_cov, bin_centers, bin_heights = fitting(theta_times, sin_fit,
+                                  (0, [3., 3., 3.]), False)
+    
+#plots histogram
+plt.plot(bin_centers, sin_fit(bin_centers, *fit_params), 'r--',
+          label='fit: a=%5.2f, b=%5.2f, c=%5.2f' % tuple(fit_params))
+
+plt.title("\u03B8 distribution, fit: $y = asin(bx) + c$")
+plt.xlabel('\u03B8 distribution')
+plt.ylabel('counts')
+plt.legend()
+plt.show()
+
+# test based on chi-squared values
+observed = bin_heights
+expected = 0.5*np.sin(bin_centers)
+test_bool = np.append(test_bool, chi2test(observed, expected, 0.95, True))
+
+# converts spherical coordinates to cartesian and projects onto a perpendicular
+# detector        
+x = ((2-v*decay_times)*np.tan(theta_times-np.pi/2)*np.sin(phi_times))
+y = ((2-v*decay_times)*np.tan(theta_times-np.pi/2)*np.cos(phi_times))
+
+# create array of x resolution corrections
+x_res = np.random.normal(0, 0.1, len(decay_times))
+# finds histrogram and fitting
+fit_params, fit_cov, bin_centers, bin_heights = fitting(x_res, normal_fit,
+                                  (0, [1., 1.]), False)
+
+#plots histogram
+plt.plot(bin_centers, normal_fit(bin_centers, *fit_params), 'r--',
+          label='fit: $\mu$=%5.2f, $\sigma$=%5.2f' % tuple(fit_params))
+
+plt.title("x resolution distribution, fit: $y \sim N(\mu,\sigma)$")
+plt.xlabel('x resolution distribution')
+plt.ylabel('counts')    
+plt.legend()
+plt.show()  
+
+# test based on chi-squared values
+observed = bin_heights
+expected = [stats.norm.pdf(i, 0, 0.1) for i in bin_centers]
+test_bool = np.append(test_bool, chi2test(observed, expected, 0.95, True))
+                            
+# create array of y resolution corrections
+y_res = np.random.normal(0, 0.3, len(decay_times))
+# finds histrogram and fitting
+fit_params, fit_cov, bin_centers, bin_heights = fitting(y_res, normal_fit, 
+                                  (0, [1., 1.]), False)
+
+#plots histogram
+plt.plot(bin_centers, normal_fit(bin_centers, *fit_params), 'r--',
+          label='fit: $\mu$=%5.2f, $\sigma$=%5.2f' % tuple(fit_params))
+
+plt.title("y resolution distribution, fit: $y \sim N(\mu,\sigma)$")
+plt.xlabel('y resolution distribution')
+plt.ylabel('counts') 
+plt.legend()
+plt.show() 
+
+# test based on chi-squared values
+observed = bin_heights
+expected = [stats.norm.pdf(i, 0, 0.3) for i in bin_centers]
+test_bool = np.append(test_bool, chi2test(observed, expected, 0.95, True))
+
+# continues if test outcomes all 'True', or if N2 is small, where p-values
+# tend to be low 
+if all(tests == True for tests in test_bool ) or N2 < 100:
+    
+    # add on corrections for x and y resolutions
+    x = x + x_res
+    y = y + y_res
+    
+    fig = plt.figure()
+    
+    gs = plt.GridSpec(4,4,hspace=0.5, wspace=0.5)
+    
+    # creates main and marginal histograms 
+    ax_main = fig.add_subplot(gs[1:4,0:3])
+    ax_marg_x = fig.add_subplot(gs[0,0:3])
+    ax_marg_y = fig.add_subplot(gs[1:4,3])
+    
+    # plot 3 histograms with logarithmic scales
+    ax_main.hist2d(y, x, bins=[120, 120] , normed=False, 
+               norm=mpl.colors.LogNorm(), range= [[-6,6], [-6,6]])
+    ax_marg_x.hist(y, 120, range = [-6,6],
+                orientation='vertical',log=True)
+    ax_marg_y.hist(x,120, range = [-6,6],orientation='horizontal',log=True)
+    
+    # Turn off tick labels on marginal plots
+    plt.setp(ax_marg_x.get_xticklabels(), visible=False)
+    plt.setp(ax_marg_y.get_yticklabels(), visible=False)   
+    
+    # Set labels on main plot
+    ax_main.set_xlabel('y (m)')
+    ax_main.set_ylabel('x (m)')
+    
+    plt.show()
+    print('Counts shown on a 12x12 m detector, plotted on a logarithmic scale'
+          '\n\n\n')
+
+else:
+    
+    print("Simulated random numbers did not meet required distributions")
+
+###############
+# Task 3: Statistical analysis on the cross section of a new particle
+###############
+print("########## Task 3 Plots: Statistical analysis on a 95% confidence "
+      "level placed on the cross section of a new particle ##########\n\n")
+
+# number of pseudo-experiments modelled    
+N3 = int(5000)
+
+# find the limit on the cross section     
+cs95 = optimize.bisect(confidence_level , 0, 2)
+
+# find corresponding total signal distribution
+totaldist, test_bool3 = total_signal(cs95, N3)
+
+# continue if all tests are passed
+if all(tests == True for tests in test_bool3 ):
+    
+    print('Limit on the cross section corresponding to a 95% confidence '
+          'level: \nsigma = ',cs95, 'nb') 
+    
+    # plots histogram of total number of candidate events
+    plt.hist(totaldist, bins = 'fd' )
+    plt.title('Distribution of the total number of candidate events')
+    plt.xlabel('Number of candidate events')
+    plt.ylabel('Counts')
+    plt.show()
+    
+    fit_params, fit_cov, bin_centers, bin_heights = fitting(totaldist,
+                                poisson_fit, (0, 20.), False)
+    plt.plot(bin_centers, poisson_fit(bin_centers, *fit_params), 'r--',
+              label='fit: $\lambda=$%5.2f' % tuple(fit_params))
+    
+    # plot normalised histogram with a Poisson fit
+    print('\n\n\nComparison between observed events and those distributed'
+    '\nwith T~ Poisson(s + b): \n')
+    plt.title("Normalised histogram, Poisson Fit: $y \sim Poi(\lambda)$")
+    plt.xlabel('Number of candidate events')
+    plt.ylabel('Counts') 
+    plt.legend()
+    plt.show()
+    
+    # calculate chi squared value between observed events and those 
+    # distributed with T~ Poisson(s + b)
+    observed = bin_heights
+    expected = poisson_fit(bin_centers, 5.7 + 12*cs95)
+    stat, p = stats.chisquare(observed, expected)   
+    print('Chi-squared value: ', stat, '\np-value: ', p, '\n\n')
+    
+else:    
+    print("Simulated random numbers did not meet required distributions")
