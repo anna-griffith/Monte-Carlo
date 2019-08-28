@@ -1,2 +1,6 @@
 # Monte-Carlo
 Uni project to simulate experiments based on Monte Carlo methods
+
+Both the transformation and accept-reject methods for generating random numbers with a chosen probability distribution are compared, and then used to model the production and detection of gamma rays.
+
+Monte-Carlo methods can also be used for statistical analysis. In this report a confidence level is calculated for the cross section of a particle where the total number of candidate events is measured to be 5. Since the counts for both the background and collision events occur independently and at a constant rate, they are suitable to be modelled by a Poisson distribution. If the background rate is known with negligible uncertainty, then the total rate will be distributed as T ∼ Poisson(s + b), where s, b are the mean signal and background rates respectively. In this case the mean signal rate is Lσ where the integrated luminosity, L = 12 ± 1(nb)−1 and the mean background, b = 5.7±0.4. Clearly the uncertainly on the background rate is not negligible, but using the Poisson distribution as an approximation, if T ∼ Poisson(10.5) then P(T≤5)=0.05, giving an estimate of σ≤0.4 at a 95% confidence level. The Monte-Carlo method will take into account the larger error on the background rate and luminosity value, giving a more accurate bound on σ.
